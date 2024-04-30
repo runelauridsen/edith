@@ -24,16 +24,16 @@ struct edith_app_input {
     rect client_rect;
     f32 deltatime;
     i64 tick;
-    ui_events events;
+    yo_event_list events;
     vec2 mouse_pos;
-    ui_mouse_buttons mouse_buttons;
+    bool mouse_buttons[YO_MOUSE_BUTTON_COUNT];
     bool window_has_focus;
 };
 
 // NOTE(rune): Output from app -> platform
 typedef struct edith_app_output edith_app_output;
 struct edith_app_output {
-    r_pass_list render_passes;
+    yo_node *root;
     bool need_redraw;
 };
 
@@ -50,7 +50,7 @@ typedef enum edith_app_state {
 typedef struct edith_pane edith_pane;
 struct edith_pane {
     edith_editor_tab *tab;
-    ui_animated_f32 active_t;
+    f32 active_t;
 };
 
 typedef struct edith_app_callbacks edith_app_callbacks;
@@ -66,29 +66,15 @@ struct edith_app {
     arena *perm;
     arena *temp;
     atlas atlas;
-    ui_font mono_font;
-    ui_font sans_font;
-    ui_face editor_face;
+    r_d3d11_tex atlas_tex;
+
+    yo_font mono_font;
+    yo_font sans_font;
+    yo_face editor_face;
 
     edith_app_callbacks callbacks;
 
-    draw_ctx draw_ctx;
-
-    struct {
-        edith_dialog_open_file_data   dialog_open_file;
-        edith_dialog_find_data        dialog_find;
-        edith_dialog_goto_line_data   dialog_goto_line;
-        edith_dialog_commands_data    dialog_commands;
-
-        ui_ctx ui_ctx;
-
-        ui_toast ui_toast_storage[64];
-        ui_toast_ctx ui_toast_ctx;
-
-        bool window_has_focus; // TODO(rune): Cleanup
-    };
-
-    font_backend_stb font_backend;
+    font_backend font_backend;
 
     edith_editor_tab_list tabs;
     edith_editor_tab *first_free_editor_tab;
@@ -101,14 +87,16 @@ struct edith_app {
 
     edith_app_state state;
 
-    darray(r_rect_instance) ui_rect_storage;
-    darray(r_rect_instance) misc_rect_storage;
-
-    i64 last_frame_rect_instance_count;
-
     edith_perf_timings frame_timing;
     edith_perf_timings build_ui_timing;
     edith_perf_timings draw_ui_ops_timing;
+
+    r_d3d11_tex title_tex;
+    bool window_has_focus;
+
+    r_state renderer;
+
+    yo_state *yo_state;
 
     bool stop;
 };

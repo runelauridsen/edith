@@ -15,29 +15,29 @@ static str edith_tprint_(args args) {
 
 static void edith_mem_init(void) {
     edith_thread_local_arena      = arena_create_default();
-    edith_global_mem_track_arena  = arena_create_default();
-    edith_global_mem_track_mutex  = os_mutex_create();
+    edith_g_mem_track_arena  = arena_create_default();
+    edith_g_mem_track_mutex  = os_mutex_create();
 
-    edith_mem_track(edith_global_mem_track_arena, EDITH_MEM_TRACK_KIND_ARENA, EDITH_MEM_TRACK_ACTION_ALLOC)->name = str("mem track");
+    edith_mem_track(edith_g_mem_track_arena, EDITH_MEM_TRACK_KIND_ARENA, EDITH_MEM_TRACK_ACTION_ALLOC)->name = str("mem track");
     edith_mem_track(edith_thread_local_arena, EDITH_MEM_TRACK_KIND_ARENA, EDITH_MEM_TRACK_ACTION_ALLOC)->name = str("thread local");
 }
 
 static edith_mem_track_node *edith_mem_track(void *ptr, edith_mem_track_kind kind, edith_mem_track_action action) {
     edith_mem_track_node *node = null;
 
-    os_mutex_scope(edith_global_mem_track_mutex) {
+    os_mutex_scope(edith_g_mem_track_mutex) {
         switch (action) {
             case EDITH_MEM_TRACK_ACTION_ALLOC: {
-                node = arena_push_struct(edith_global_mem_track_arena, edith_mem_track_node);
+                node = arena_push_struct(edith_g_mem_track_arena, edith_mem_track_node);
                 node->kind = kind;
                 node->ptr = ptr;
 
-                dlist_push(&edith_global_mem_track_list, node);
+                dlist_push(&edith_g_mem_track_list, node);
             } break;
 
             case EDITH_MEM_TRACK_ACTION_REALLOC:
             case EDITH_MEM_TRACK_ACTION_FREE: {
-                for_list (edith_mem_track_node, it, edith_global_mem_track_list) {
+                for_list (edith_mem_track_node, it, edith_g_mem_track_list) {
                     if (it->kind == kind && it->ptr == ptr) {
                         node = it;
                         break;
@@ -45,7 +45,7 @@ static edith_mem_track_node *edith_mem_track(void *ptr, edith_mem_track_kind kin
                 }
 
                 if (action == EDITH_MEM_TRACK_ACTION_FREE) {
-                    dlist_remove(&edith_global_mem_track_list, node);
+                    dlist_remove(&edith_g_mem_track_list, node);
                 }
             } break;
         }
@@ -55,9 +55,9 @@ static edith_mem_track_node *edith_mem_track(void *ptr, edith_mem_track_kind kin
 }
 
 static void edith_mem_track_print(void) {
-    os_mutex_scope(edith_global_mem_track_mutex) {
+    os_mutex_scope(edith_g_mem_track_mutex) {
         print("================================================================\n");
-        for_list (edith_mem_track_node, node, edith_global_mem_track_list) {
+        for_list (edith_mem_track_node, node, edith_g_mem_track_list) {
             switch (node->kind) {
                 case EDITH_MEM_TRACK_KIND_HEAP: {
                     print("heap \t ");
@@ -94,11 +94,11 @@ static void edith_mem_track_print(void) {
 static void edith_mem_track_dump_csv(str file_name) {
     arena *temp = edith_thread_local_arena;
     str_list list = { 0 };
-    os_mutex_scope(edith_global_mem_track_mutex) {
+    os_mutex_scope(edith_g_mem_track_mutex) {
         arena_scope(temp) {
             str_list_push_fmt(&list, temp, "%,%,%,%,%", "name", "kind", "pos", "cap", "realloc");
 
-            for_list (edith_mem_track_node, node, edith_global_mem_track_list) {
+            for_list (edith_mem_track_node, node, edith_g_mem_track_list) {
                 str name = { 0 };
                 str kind = { 0 };
                 i64 pos     = 0;
@@ -181,7 +181,7 @@ static arena *edith_arena_create(i64 cap, arena_kind kind, str name) {
     arena *arena = arena_create(cap, kind);
 
     edith_mem_track_node *node = edith_mem_track(arena, EDITH_MEM_TRACK_KIND_ARENA, EDITH_MEM_TRACK_ACTION_ALLOC);
-    node->name = arena_copy_str(edith_global_mem_track_arena, name);
+    node->name = arena_copy_str(edith_g_mem_track_arena, name);
 
     return arena;
 }

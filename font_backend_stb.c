@@ -1,60 +1,60 @@
-static bool font_backend_stb_startup(font_backend_stb *backend, atlas *atlas) {
+static bool font_backend_startup(font_backend *backend, atlas *atlas) {
     // @Todo Error handling.
     map_create(&backend->glyph_map, countof(backend->glyph_storage));
     backend->atlas = atlas;
     return true;
 }
 
-static u64 font_backend_stb_make_glyph_key(ui_face face, u32 codepoint) {
+static u64 font_backend_make_glyph_key(yo_face face, u32 codepoint) {
     u64 ret = pack_u32x2(face.u32, codepoint);
     return ret;
 }
 
-static f32 font_backend_stb_get_scale(font_backend_stb_slot *slot, u16 fontsize) {
+static f32 font_backend_get_scale(font_backend_slot *slot, u16 fontsize) {
     f32 scale = f32(fontsize) / f32(slot->ascent);
     return scale;
 }
 
-static font_backend_stb_slot *font_backend_stb_get_slot(font_backend_stb *backend, ui_font font) {
-    font_backend_stb_slot *ret = null;
+static font_backend_slot *font_backend_get_slot(font_backend *backend, yo_font font) {
+    font_backend_slot *ret = null;
     if (font.u16 >= 1 && font.u16 <= countof(backend->slots)) {
         ret = &backend->slots[font.u16 - 1];
     }
     return ret;
 }
 
-static f32 font_backend_stb_get_advance(void *userdata, ui_face face, u32 codepoint) {
+static f32 font_backend_get_advance(void *userdata, yo_face face, u32 codepoint) {
     f32 ret = 1;
-    font_backend_stb *backend = (font_backend_stb *)userdata;
-    font_backend_stb_slot *slot = font_backend_stb_get_slot(backend, face.font);
+    font_backend *backend = (font_backend *)userdata;
+    font_backend_slot *slot = font_backend_get_slot(backend, face.font);
     if (slot) {
-        f32 scale = font_backend_stb_get_scale(slot, face.fontsize);
+        f32 scale = font_backend_get_scale(slot, face.fontsize);
         if (codepoint < countof(slot->advance_cache_ascii)) {
             ret = slot->advance_cache_ascii[codepoint] * scale;
         } else {
-            // TODO(rune): get_advance() for non-ascii codepoints.");
+            // @todo get_advance() for non-ascii codepoints.");
             ret = slot->advance_cache_ascii[' '] * scale;
         }
     }
     return ret;
 }
 
-static f32 font_backend_stb_get_lineheight(void *userdata, ui_face face) {
+static f32 font_backend_get_lineheight(void *userdata, yo_face face) {
     f32 ret = 1;
-    font_backend_stb *backend = (font_backend_stb *)userdata;
-    font_backend_stb_slot *slot = font_backend_stb_get_slot(backend, face.font);
+    font_backend *backend = (font_backend *)userdata;
+    font_backend_slot *slot = font_backend_get_slot(backend, face.font);
     if (slot) {
-        f32 scale = font_backend_stb_get_scale(slot, face.fontsize);
+        f32 scale = font_backend_get_scale(slot, face.fontsize);
         ret = slot->lineheight * scale;
     }
     return ret;
 }
 
-static font_metrics font_backend_stb_get_font_metrics(font_backend_stb *backend, ui_face face) {
+static font_metrics font_backend_get_font_metrics(font_backend *backend, yo_face face) {
     font_metrics ret = { 0 };
-    font_backend_stb_slot *slot = font_backend_stb_get_slot(backend, face.font);
+    font_backend_slot *slot = font_backend_get_slot(backend, face.font);
     if (slot) {
-        f32 scale = font_backend_stb_get_scale(slot, face.fontsize);
+        f32 scale = font_backend_get_scale(slot, face.fontsize);
         ret.ascent = slot->ascent * scale;
         ret.descent = slot->descent * scale;
         ret.linegap = slot->linegap * scale;
@@ -64,40 +64,51 @@ static font_metrics font_backend_stb_get_font_metrics(font_backend_stb *backend,
     return ret;
 }
 
-static glyph font_backend_stb_get_glyph(font_backend_stb *backend, ui_face face, u32 codepoint) {
+static glyph font_backend_get_glyph(font_backend *backend, yo_face face, u32 codepoint) {
     glyph ret = { 0 };
-    u64 key = font_backend_stb_make_glyph_key(face, codepoint);
+
+    bool found_cached = 0;
+    u64 key = font_backend_make_glyph_key(face, codepoint);
     u64 glyph_idx;
     if (map_get(&backend->glyph_map, key, &glyph_idx)) {
         assert_bounds(glyph_idx, countof(backend->glyph_storage));
         ret = backend->glyph_storage[glyph_idx];
-    } else {
-        font_backend_stb_slot *slot = font_backend_stb_get_slot(backend, face.font);
+
+        urect rect = { 0 };
+        if (atlas_get_slot(backend->atlas, ret.atlas_key, &rect)) {
+            found_cached = true;
+        }
+    }
+
+    if (found_cached == false) {
+        font_backend_slot *slot = font_backend_get_slot(backend, face.font);
         if (slot) {
-            f32 scale = font_backend_stb_get_scale(slot, face.fontsize);
+            f32 scale = font_backend_get_scale(slot, face.fontsize);
 
             i32 unscaled_bearing_x, unscaled_advance;
             stbtt_GetCodepointHMetrics(&slot->stb_info, codepoint, &unscaled_advance, &unscaled_bearing_x);
 
-            irect rect = { 0 };
+            i32 box_x0, box_y0, box_x1, box_y1;
             stbtt_GetCodepointBitmapBox(&slot->stb_info, codepoint, scale, scale,
-                                        &rect.x0, &rect.y0, &rect.x1, &rect.y1);
+                                        &box_x0, &box_y0, &box_x1, &box_y1);
 
             ret.advance   = (f32)unscaled_advance * scale;
-            ret.bearing.x = (f32)rect.x0;
-            ret.bearing.y = (f32)rect.y0;
+            ret.bearing.x = (f32)box_x0;
+            ret.bearing.y = (f32)box_y0;
 
             atlas *atlas = backend->atlas;
-            ivec2 dim = irect_dim(rect);
-            atlas_node *node = atlas_new_node(atlas, key, dim);
-            if (node) {
-                i32 stride = atlas->dim.x;
-                u8 *pixel = &atlas->pixels[node->rect.x0 + node->rect.y0 * stride];
-                i32 w = irect_dim_x(node->rect);
-                i32 h = irect_dim_y(node->rect);
+            uvec2 dim = uvec2(box_x1 - box_x0, box_y1 - box_y0);
+            atlas_slot_key atlas_key = atlas_new_slot(atlas,  dim);
+
+            urect atlas_rect = { 0 };
+            if (atlas_get_slot(atlas, atlas_key, &atlas_rect)) {
+                u32 stride = atlas->dim.x;
+                u8 *pixel = &atlas->pixels[atlas_rect.x0 + atlas_rect.y0 * stride];
+                u32 w = urect_dim_x(atlas_rect);
+                u32 h = urect_dim_y(atlas_rect);
                 stbtt_MakeCodepointBitmap(&slot->stb_info, pixel, w, h, stride, scale, scale, codepoint);
                 atlas->dirty = true;
-                ret.atlas_idx = u32(node - atlas->node_storage);
+                ret.atlas_key = atlas_key;
             }
 
             if (backend->glyph_storage_count < countof(backend->glyph_storage)) {
@@ -112,16 +123,14 @@ static glyph font_backend_stb_get_glyph(font_backend_stb *backend, ui_face face,
     return ret;
 }
 
-static ui_font font_backend_stb_init_font(font_backend_stb *backend, void *data, u64 data_size) {
-    unused(data_size);
-
-    ui_font ret = { 0 };
+static yo_font font_backend_init_font(font_backend *backend, str data) {
+    yo_font ret = { 0 };
 
     if (backend->slot_count < countof(backend->slots)) {
-        font_backend_stb_slot *slot = &backend->slots[backend->slot_count++];
+        font_backend_slot *slot = &backend->slots[backend->slot_count++];
         ret.u16 = backend->slot_count;
 
-        stbtt_InitFont(&slot->stb_info, data, 0); // @Todo Error handling, don't increment backend->slot_count in case of invalid data.
+        stbtt_InitFont(&slot->stb_info, data.v, 0); // @Todo Error handling, don't increment backend->slot_count in case of invalid data.
 
         int ascent, descent, linegap;
         stbtt_GetFontVMetrics(&slot->stb_info, &ascent, &descent, &linegap);
@@ -132,7 +141,7 @@ static ui_font font_backend_stb_init_font(font_backend_stb *backend, void *data,
 
         for_n (i32, i, countof(slot->advance_cache_ascii)) {
             i32 c = i;
-            if (!u32_is_printable) {
+            if (!u32_is_printable(c)) {
                 c = ' ';
             }
 

@@ -1,7 +1,7 @@
-static void edith_editor_tab_handle_events(ui_id id, edith_editor_tab *tab, ui_events events, arena *temp) {
+static void editor_tab_handle_events(yo_id id, edith_editor_tab *tab, arena *temp) {
     unused(temp);
 
-    YO_PROFILE_BEGIN(edith_editor_tab_handle_events);
+    YO_PROFILE_BEGIN(editor_tab_handle_events);
 
     edith_textview *editor = &tab->v;
 
@@ -9,36 +9,36 @@ static void edith_editor_tab_handle_events(ui_id id, edith_editor_tab *tab, ui_e
     // Process events.
 
     bool mouse_moved = false;
-    for_array (ui_event, e, events) {
-        if (ui_event_is_keypress_with_modifiers(e, UI_KEY_ENTER, UI_MODIFIER_NONE)) {
+    for_list (yo_event, e, yo_events()) {
+        if (yo_event_is_key_press(e, YO_KEY_ENTER, YO_MODIFIER_NONE)) {
             edith_textview_submit_u8(editor, '\n');
         }
 
-        if (e->type == UI_EVENT_TYPE_CODEPOINT) {
+        if (e->kind == YO_EVENT_KIND_CODEPOINT) {
             if (u32_is_printable(e->codepoint) || e->codepoint == '\n') {
                 edith_textview_submit_u32(editor, (u8)e->codepoint);
             }
         }
 
-        // Click to move cursor.
-        if (e->type == UI_EVENT_TYPE_CLICK) {
-            bool keep_mark = e->modifiers & UI_MODIFIER_SHIFT;
-            vec2 screen_pos = ui_mouse_pos();
-            if (e->modifiers == (UI_MODIFIER_CTRL|UI_MODIFIER_ALT)) {
+        //- Click to move cursor.
+        if (e->kind == YO_EVENT_KIND_MOUSE_PRESS) {
+            bool keep_mark = e->mods & YO_MODIFIER_SHIFT;
+            vec2 screen_pos = yo_mouse_pos();
+            if (e->mods == (YO_MODIFIER_CTRL|YO_MODIFIER_ALT)) {
                 edith_textview_add_cursor_at_pixel(editor, screen_pos, false);
             } else {
                 edith_textview_move_to_pixel(editor, screen_pos, keep_mark);
             }
         }
 
-        // Scroll.
-        if (e->type == UI_EVENT_TYPE_SCROLL) {
+        //- Scroll.
+        if (e->kind == YO_EVENT_KIND_SCROLL) {
             const i64 lines_per_scroll = 4;
             editor->target_scroll.row += i64(e->scroll.y) * lines_per_scroll;
         }
 
-        // Drag select.
-        if (e->type == UI_EVENT_TYPE_MOUSE_MOVE) {
+        //- Drag select.
+        if (e->kind == YO_EVENT_KIND_MOUSE_MOVE) {
             mouse_moved = true;
         }
     }
@@ -46,10 +46,12 @@ static void edith_editor_tab_handle_events(ui_id id, edith_editor_tab *tab, ui_e
     ////////////////////////////////////////////////
     // Drag select.
 
-    if (mouse_moved || !editor->animated_scroll.completed) {
-        if (ui_id_is_active(id) && ui_mouse_button_is_down(UI_MOUSE_BUTTON_LEFT)) {
+    // TODO(rune): || !(scroll_animation.is_completed)
+    if (mouse_moved) {
+        // TODO(rune): && is mouse button down
+        if (id == yo_active_id() && 0) {
             edith_textview_cursors_clear_secondary(editor);
-            vec2 screen_pos = ui_mouse_pos();
+            vec2 screen_pos = yo_mouse_pos();
             i64 pos = edith_textview_pos_from_pixel(editor, screen_pos);
 
             for_array (edith_cursor, it, editor->cursors) {
@@ -61,7 +63,7 @@ static void edith_editor_tab_handle_events(ui_id id, edith_editor_tab *tab, ui_e
         }
     }
 
-    YO_PROFILE_END(edith_editor_tab_handle_events);
+    YO_PROFILE_END(editor_tab_handle_events);
 }
 
 typedef struct caret_to_draw caret_to_draw;
@@ -71,8 +73,10 @@ struct caret_to_draw {
     caret_to_draw *next;
 };
 
-static void ui_draw_editor(ui_id id, edith_textview *tv, rect viewport, ui_face face) {
+static void ui_draw_editor(yo_id id, edith_textview *tv, rect viewport, yo_face face) {
     YO_PROFILE_BEGIN(ui_draw_editor);
+
+    yo_node *node = yo_node_begin(id);
 
     edith_textview_scroll_clamp(tv);
 
@@ -91,11 +95,12 @@ static void ui_draw_editor(ui_id id, edith_textview *tv, rect viewport, ui_face 
     arena *temp = tv->local;
     arena_scope_begin(temp);
 
-    ui_push_scissor();
-    ui_set_scissor(viewport, 0);
-    edith_textview_set_face(tv, ui_get_face());
+    //ui_push_scissor();
+    //ui_set_scissor(viewport, 0);
+    edith_textview_set_face(tv, face);
 
-    ui_interact(id, UI_INTERACTION_ACTIVATE_HOLD, viewport);
+    yo_signal sig = yo_signal_from_node(node);
+    node->rel_rect = viewport;
 
     u32 background_color = rgb(15, 15, 15);
     u32 foreground_color = rgb(180, 180, 180);
@@ -103,26 +108,26 @@ static void ui_draw_editor(ui_id id, edith_textview *tv, rect viewport, ui_face 
     f32 lineheight    = f32(tv->cell_dim.y);
     vec2 cell_dim     = vec2_from_ivec2(tv->cell_dim);
 
-    ui_draw_rect(viewport, background_color);
+    yo_draw_rect(viewport, background_color);
 
-    ui_set_face(face);
+    yo_face_set(face);
 
     ////////////////////////////////////////////////////////////////
     // rune: Animate
 
     vec2 target_scroll_f = vec2(0, f32(tv->target_scroll.row * tv->cell_dim.y));
-#if 1
+#if 0
     f32 scroll_anim_rate = 15.0f;
     ui_anim_damped_vec2(&tv->animated_scroll, target_scroll_f, scroll_anim_rate, 0.1f);
 #else
     f32 scroll_anim_rate = 18.0f;
-    ui_anim_vec2(&editor->animated_scroll, target_scroll_f, scroll_anim_rate);
+    yo_anim_vec2(&tv->animated_scroll, target_scroll_f, scroll_anim_rate);
 #endif
 
     // NOTE(rune): Sine glyphs are always snapped to the pixel grid,
     // we use rounded scroll to avoid flickering, when a glyph snaps
     // from one pixel to the next.
-    vec2 rounded_scroll = vec2_round(tv->animated_scroll.pos);
+    vec2 rounded_scroll = vec2_round(tv->animated_scroll);
     i64 lines_per_page = i64(rect_dim_y(viewport) / lineheight) + 1;
 
     ////////////////////////////////////////////////////////////////
@@ -183,8 +188,8 @@ static void ui_draw_editor(ui_id id, edith_textview *tv, rect viewport, ui_face 
                 );
 
                 // Animate?
-                bool is_drag_selecting = ui_id_is_active(id) && ui_mouse_button_is_down(UI_MOUSE_BUTTON_LEFT);
-                if (is_drag_selecting) ui_reset_damped_vec2(&it->animated_p);
+                bool is_drag_selecting = id == yo_active_id() && 0; // TODO(rune): & ui_mouse_button_is_down(YO_MOUSE_BUTTON_LEFT);
+                if (is_drag_selecting) it->animated_p = caret_p;
 
 #if 0
                 it->animated_p.pos = caret_p;
@@ -193,17 +198,17 @@ static void ui_draw_editor(ui_id id, edith_textview *tv, rect viewport, ui_face 
                 ui_anim_damped_vec2(&it->animated_p, caret_p, caret_anim_rate, 1);
 #else
                 f32 caret_anim_rate = 20.0f;
-                ui_anim_vec2(&it->animated_p, caret_p, caret_anim_rate);
+                yo_anim_vec2(&it->animated_p, caret_p, caret_anim_rate);
 #endif
 
                 // Push to list of carets that need to be drawn.
-                caret_to_draw *a = arena_push_struct(ui_arena(), caret_to_draw);
+                caret_to_draw *a = arena_push_struct(yo_frame_arena(), caret_to_draw);
                 a->is_primary = it->is_primary;
-                a->pos = it->animated_p.pos;
+                a->pos = it->animated_p;
                 slstack_push(&carets, a);
 
             } else {
-                ui_reset_damped_vec2(&it->animated_p);
+                // TODO(rune): ui_reset_damped_vec2(&it->animated_p);
             }
 
             ////////////////////////////////////////////////////////////////
@@ -222,31 +227,41 @@ static void ui_draw_editor(ui_id id, edith_textview *tv, rect viewport, ui_face 
     YO_PROFILE_BEGIN(editor_draw_linenumbers);
     {
         i64 highlight_linenumber;
-        if (primary_cursor.animated_p.started || 1) {
-            highlight_linenumber = i64((primary_cursor.animated_p.pos.y + lineheight / 2) / lineheight);
+        if (1) {
+            highlight_linenumber = i64((primary_cursor.animated_p.y + lineheight / 2) / lineheight);
         } else {
             highlight_linenumber = edith_textbuf_row_from_pos(&tv->tb, primary_cursor.caret);
         }
 
         i64 max_linenumber = edith_textbuf_row_count(&tv->tb);
-        str longest_decimal = ui_fmt("%", max_linenumber);
+        str longest_decimal = yo_fmt("%", max_linenumber);
 
         f32 linenumber_padding = 5.0f;
-        f32 linenumber_width = ui_measure_text(longest_decimal).x;
+        f32 linenumber_width = yo_adv_from_text(longest_decimal);
         u32 linenumber_color = rgb(60, 60, 60);
         u32 linenumber_highlight_color = rgb(90, 90, 90);
         f32 linenumber_anim_rate = 20.0f;
-        linenumber_width = f32_round(ui_anim_damped_f32(&tv->animated_linenumber_width, linenumber_width, linenumber_anim_rate, 0.1f));
+        linenumber_width = f32_round(
+            yo_anim_damped_f32(
+                &tv->anim_linenumber_width,
+                &tv->anim_linenumber_width_vel,
+                linenumber_width,
+                linenumber_anim_rate,
+                0.1f,
+                &tv->anim_linenumber_width_started,
+                &tv->anim_linenumber_width_finished
+            )
+        );
 
-        ui_cut_left(&viewport, linenumber_padding);
-        rect linenumber_area = ui_cut_left(&viewport, linenumber_width);
-        ui_cut_left(&viewport, linenumber_padding);
+        yo_rect_cut_left(&viewport, linenumber_padding);
+        rect linenumber_area = yo_rect_cut_left(&viewport, linenumber_width);
+        yo_rect_cut_left(&viewport, linenumber_padding);
 
         i64 at = min_visible_line;
         vec2 p = vec2_add(linenumber_area.p0, scroll_fraction);
         while (p.y < viewport.y1 && at < max_linenumber) {
-            str decimal = ui_fmt("%", at + 1);
-            f32 adv = ui_measure_text(decimal).x;
+            str decimal = yo_fmt("%", at + 1);
+            f32 adv = yo_adv_from_text(decimal);
 
             vec2 glyph_p = p;
             glyph_p.x += linenumber_width - adv;
@@ -257,7 +272,7 @@ static void ui_draw_editor(ui_id id, edith_textview *tv, rect viewport, ui_face 
             } else {
                 at_color = linenumber_color;
             }
-            ui_draw_text(glyph_p, decimal, at_color);
+            yo_draw_text(glyph_p, decimal, at_color);
 
             at++;
             p.y += lineheight;
@@ -265,10 +280,10 @@ static void ui_draw_editor(ui_id id, edith_textview *tv, rect viewport, ui_face 
 
         u32 divider_color = rgb(50, 50, 50);
         f32 divider_width = 2.0f;
-        rect divider_area = ui_cut_left(&viewport, divider_width);
-        ui_draw_rect(divider_area, divider_color);
+        rect divider_area = yo_rect_cut_left(&viewport, divider_width);
+        yo_draw_rect(divider_area, divider_color);
         f32 divider_margin = 5.0f;
-        ui_cut_left(&viewport, divider_margin);
+        yo_rect_cut_left(&viewport, divider_margin);
     }
     YO_PROFILE_END(editor_draw_linenumbers);
 
@@ -351,11 +366,11 @@ static void ui_draw_editor(ui_id id, edith_textview *tv, rect viewport, ui_face 
                 vec2 p0 = vec2_add(p, glyph_viewport.p0);
                 cell_rect = rect_make_dim(p0, cell_dim);
 
-                ui_draw_glyph(cell_rect.p0, iter.codepoint, color);
+                yo_draw_glyph(cell_rect.p0, iter.codepoint, color);
 
                 if (search_result_idx < search_results.count) {
                     if (range_contains(search_results.v[search_result_idx].range, iter.pos)) {
-                        ui_draw_rect(cell_rect, rgba(255, 180, 0, 100));
+                        yo_draw_rect(cell_rect, rgba(255, 180, 0, 100));
                     }
                 }
 
@@ -367,7 +382,7 @@ static void ui_draw_editor(ui_id id, edith_textview *tv, rect viewport, ui_face 
             if (range_contains(selected_ranges[i], iter.pos)) {
                 u32 selection_color = rgba(200, 255, 255, 50);
                 rect r = cell_rect;
-                ui_draw_rect(r, selection_color);
+                yo_draw_rect(r, selection_color);
                 break;
             }
         }
@@ -389,13 +404,16 @@ static void ui_draw_editor(ui_id id, edith_textview *tv, rect viewport, ui_face 
             vec2 caret_screen_p = it->pos;
             vec2_sub_assign(&caret_screen_p, rounded_scroll);
             vec2_add_assign(&caret_screen_p, glyph_viewport.p0);
-            ui_draw_caret(caret_screen_p, 2, caret_color);
+            yo_draw_caret(caret_screen_p, 2, caret_color);
         }
     }
     YO_PROFILE_END(editor_draw_cursors);
 
-    ui_pop_scissor();
+    //ui_pop_scissor();
     arena_scope_end(tv->local);
 
+    yo_node_end();
+
     YO_PROFILE_END(ui_draw_editor);
+
 }

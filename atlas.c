@@ -4,97 +4,72 @@ static atlas_shelf *atlas_alloc_shelf(atlas *atlas) {
 
     if (ret) {
         zero_struct(ret);
-    } else if (atlas->shelf_storage_used < atlas->shelf_storage_count) {
-        ret = &atlas->shelf_storage[atlas->shelf_storage_used++];
-        zero_struct(ret);
-    }
-
-    return ret;
-}
-
-static atlas_node *atlas_alloc_node(atlas *atlas) {
-    atlas_node *ret = atlas->node_freelist.first;
-    slist_pop_front(&atlas->node_freelist);
-
-    if (ret) {
-        zero_struct(ret);
-    } else if (atlas->node_storage_used < atlas->node_storage_count) {
-        ret = &atlas->node_storage[atlas->node_storage_used++];
-        zero_struct(ret);
-    }
-
-    return ret;
-}
-
-static bool atlas_create(atlas *atlas, ivec2 dim, i32 max_nodes) {
-    zero_struct(atlas);
-
-    atlas->shelf_storage       = heap_alloc(sizeof(atlas_shelf) * 256);
-    atlas->shelf_storage_count = 256;
-
-    atlas->node_storage       = heap_alloc(sizeof(atlas_node) * max_nodes);
-    atlas->node_storage_count = max_nodes;
-
-    i64 pixel_size       = dim.x * dim.y;
-    atlas->pixels        = heap_alloc(pixel_size);
-    atlas->pixel_size    = pixel_size;
-    atlas->dim           = dim;
-
-    bool ret = (atlas->shelf_storage &&
-                atlas->node_storage &&
-                atlas->pixels);
-
-    if (ret) {
-        atlas_shelf *root_shelf = atlas_alloc_shelf(atlas);
-        root_shelf->dim_y = atlas->dim.y;
-        dlist_push(&atlas->shelves, root_shelf);
     } else {
-        atlas_destroy(atlas);
+        ret = arena_push_struct(atlas->arena, atlas_shelf);
     }
 
     return ret;
 }
 
-static void atlas_destroy(atlas *atlas) {
-    heap_free(atlas->pixels);
-    heap_free(atlas->shelf_storage);
-    heap_free(atlas->node_storage);
+static atlas_slot *atlas_alloc_slot(atlas *atlas) {
+    atlas_slot *ret = atlas->slot_freelist.first;
+    slist_pop_front(&atlas->slot_freelist);
+
+    if (ret) {
+        ret->gen++;
+        ret->next = null;
+    }
+
+    return ret;
+}
+
+static void atlas_init(atlas *atlas, uvec2 dim, u32 max_slots, arena *arena) {
     zero_struct(atlas);
+
+    atlas->arena      = arena;
+    atlas->dim        = dim;
+    atlas->slot_count = max_slots;
+    atlas->slots      = arena_push_array(arena, atlas_slot, max_slots);
+    atlas->pixels     = arena_push_array(arena, u8, dim.x * dim.y);
+
+    atlas_shelf *root_shelf = atlas_alloc_shelf(atlas);
+    root_shelf->dim_y = atlas->dim.y;
+    dlist_push(&atlas->shelves, root_shelf);
+
+    for_n (u32, i, atlas->slot_count) {
+        slist_push(&atlas->slot_freelist, &atlas->slots[i]);
+    }
 }
 
-static atlas_node *atlas_get_node(atlas *atlas, u64 key) {
-    // TODO(rune): Profile! Hashtable lookup?
+static void atlas_next_timestamp(atlas *atlas) {
+    atlas->curr_timestamp++;
+}
 
-    atlas_node *ret = null;
+static bool atlas_get_slot(atlas *atlas, atlas_slot_key key, urect *rect) {
+    bool ret = false;
 
-    for_list (atlas_shelf, shelf, atlas->shelves) {
-        for_list (atlas_node, node, shelf->nodes) {
-            if (node->key == key) {
-                node->last_accessed  = atlas->current_generation;
-                shelf->last_accessed = atlas->current_generation;
-
-                ret = node;
-            }
-        }
+    assert(key.idx < atlas->slot_count);
+    atlas_slot *slot = &atlas->slots[key.idx];
+    if (slot->gen == key.gen) {
+        *rect = slot->rect;
+        slot->timestamp = atlas->curr_timestamp;
+        ret = true;
     }
-
     return ret;
 }
 
-static rect atlas_get_node_uv(atlas *atlas, atlas_node *node) {
-    rect ret = { 0 };
+static rect atlas_get_uv(atlas *atlas, urect r) {
+    rect uv = { 0 };
 
-    if (node) {
-        ret.p0.x = (f32)(node->rect.x0) / (f32)(atlas->dim.x);
-        ret.p0.y = (f32)(node->rect.y0) / (f32)(atlas->dim.y);
-        ret.p1.x = (f32)(node->rect.x1) / (f32)(atlas->dim.x);
-        ret.p1.y = (f32)(node->rect.y1) / (f32)(atlas->dim.y);
-    }
+    uv.p0.x = (f32)(r.x0) / (f32)(atlas->dim.x);
+    uv.p0.y = (f32)(r.y0) / (f32)(atlas->dim.y);
+    uv.p1.x = (f32)(r.x1) / (f32)(atlas->dim.x);
+    uv.p1.y = (f32)(r.y1) / (f32)(atlas->dim.y);
 
-    return ret;
+    return uv;
 }
 
-static inline bool atlas_shelf_can_fit(atlas *atlas, atlas_shelf *shelf, ivec2 dim) {
+static inline bool atlas_shelf_can_fit(atlas *atlas, atlas_shelf *shelf, uvec2 dim) {
     bool ret = ((dim.y <= shelf->dim_y) &&
                 (dim.x <= atlas->dim.x - shelf->used_x));
     return ret;
@@ -104,10 +79,10 @@ static atlas_shelf *atlas_shelf_merge(atlas *atlas, atlas_shelf *a, atlas_shelf 
     assert(a != b);
     assert(a->used_x == 0);
     assert(b->used_x == 0);
-    assert(a->nodes.first == null);
-    assert(b->nodes.first == null);
-    assert(a->nodes.last  == null);
-    assert(b->nodes.last  == null);
+    assert(a->slots.first == null);
+    assert(a->slots.last  == null);
+    assert(b->slots.first == null);
+    assert(b->slots.last  == null);
     assert(a->base_y != b->base_y);
 
     // NOTE(rune): Always dealloc topmost shelf.
@@ -122,7 +97,7 @@ static atlas_shelf *atlas_shelf_merge(atlas *atlas, atlas_shelf *a, atlas_shelf 
     return bot;
 }
 
-static atlas_shelf *atlas_shelf_split(atlas *atlas, atlas_shelf *split, i32 y) {
+static atlas_shelf *atlas_shelf_split(atlas *atlas, atlas_shelf *split, u32 y) {
     atlas_shelf *ret = null;
 
     if (split->dim_y > y) {
@@ -136,7 +111,7 @@ static atlas_shelf *atlas_shelf_split(atlas *atlas, atlas_shelf *split, i32 y) {
 
         dlist_insert_before(&atlas->shelves, ret, split);
     } else if (split->dim_y == y) {
-        ret = split; // NOTE(rune): No need to split.
+        ret = split; // NOTE(rune): Exact match -> no need to split.
     } else {
         assert(!"Not enough atlas space.");
     }
@@ -146,13 +121,17 @@ static atlas_shelf *atlas_shelf_split(atlas *atlas, atlas_shelf *split, i32 y) {
 
 static atlas_shelf *atlas_shelf_reset_and_merge(atlas *atlas, atlas_shelf *reset) {
     reset->used_x = 0;
-    reset->last_accessed = 0;
 
-    if (reset->nodes.first) {
-        slist_join(&atlas->node_freelist, &reset->nodes);
+    if (reset->slots.first) {
+        for_list (atlas_slot, slot, reset->slots) {
+            slot->gen += 69; // NOTE(rune): Invalidate all atlas_slot_keys that refer to this slot.
+        }
+
+        slist_join(&atlas->slot_freelist, &reset->slots);
     }
-    reset->nodes.first = null;
-    reset->nodes.last  = null;
+
+    reset->slots.first = null;
+    reset->slots.last  = null;
 
     if (reset->next && reset->next->used_x == 0) reset = atlas_shelf_merge(atlas, reset, reset->next);
     if (reset->prev && reset->prev->used_x == 0) reset = atlas_shelf_merge(atlas, reset, reset->prev);
@@ -160,23 +139,29 @@ static atlas_shelf *atlas_shelf_reset_and_merge(atlas *atlas, atlas_shelf *reset
     return reset;
 }
 
-static atlas_shelf *atlas_prune(atlas *atlas, i32 until_y) {
+static atlas_shelf *atlas_prune(atlas *atlas, u32 until_y) {
     atlas_shelf *ret = null;
     atlas_shelf *stale = null;
-    i64 stale_last_accessed = 0;
+    u64 min_timestamp_found = 0;
     do {
-        // NOTE(rune): Find shelf with lowest last accessed generation.
+        // rune: Find shelf with lowest last accessed generation.
         stale = null;
-        stale_last_accessed = atlas->current_generation;
+        min_timestamp_found = atlas->curr_timestamp;
         for_list (atlas_shelf, it, atlas->shelves) {
-            // NOTE(rune): We assume that caller has already checked empty shelves.
-            if (it->used_x > 0 && it->last_accessed < stale_last_accessed) {
+            // rune: Find timestamp of most recently accessed slot in this shelf.
+            u32 it_timestamp = 0;
+            for_list (atlas_slot, slot, it->slots) {
+                max_assign(&it_timestamp, slot->timestamp);
+            }
+
+            // rune: We assume that caller has already checked empty shelves.
+            if (it->used_x > 0 && it_timestamp < min_timestamp_found) {
                 stale = it;
-                stale_last_accessed = it->last_accessed;
+                min_timestamp_found = it_timestamp;
             }
         }
 
-        // NOTE(rune): Reset shelf with lowest last accessed generation.
+        // rune: Reset shelf with lowest last accessed generation.
         if (stale) {
             stale = atlas_shelf_reset_and_merge(atlas, stale);
 
@@ -185,33 +170,34 @@ static atlas_shelf *atlas_prune(atlas *atlas, i32 until_y) {
             }
         }
 
-        // NOTE(rune): Stop when there are no more stale shelves,
-        // or when we found/merged a shelf that fits until_y.
+        // rune: Stop when there are no more stale shelves, or when we found/merged a shelf that fits until_y.
     } while (stale && !ret);
 
     return ret;
 }
 
-static atlas_node *atlas_new_node(atlas *atlas, u64 key, ivec2 dim) {
-    atlas_node  *ret           = null;
+static atlas_slot_key atlas_new_slot(atlas *atlas, uvec2 dim) {
+    atlas_slot_key key         = { 0 };
+    atlas_slot  *slot          = null;
     atlas_shelf *best_nonempty = null;
     atlas_shelf *best_empty    = null;
-    ivec2 rounded_dim          = ivec2(dim.x, dim.y - (dim.y - 1) % 8 + (8 - 1));
+    uvec2 rounded_dim          = uvec2(dim.x, dim.y - (dim.y - 1) % 8 + (8 - 1));
 
     // NOTE(rune): Find the shelves where we waste the least amount of y-space.
     for_list (atlas_shelf, shelf, atlas->shelves) {
-        i32 wasted = shelf->dim_y - rounded_dim.y;
-        bool fits = atlas_shelf_can_fit(atlas, shelf, rounded_dim);
 
-        if (fits && shelf->used_x) {
-            if (best_nonempty == null || wasted < best_nonempty->dim_y - rounded_dim.y) {
-                best_nonempty = shelf;
-            }
-        }
+        bool fits = ((dim.y <= shelf->dim_y) && (dim.x <= atlas->dim.x - shelf->used_x));
+        if (fits) {
+            u32 wasted = shelf->dim_y - rounded_dim.y;
 
-        if (fits && !shelf->used_x) {
-            if (best_empty == null || wasted < best_empty->dim_y - rounded_dim.y) {
-                best_empty = shelf;
+            if (shelf->used_x != 0) {
+                if (best_nonempty == null || wasted < best_nonempty->dim_y - rounded_dim.y) {
+                    best_nonempty = shelf;
+                }
+            } else {
+                if (best_empty == null || wasted < best_empty->dim_y - rounded_dim.y) {
+                    best_empty = shelf;
+                }
             }
         }
     }
@@ -220,7 +206,6 @@ static atlas_node *atlas_new_node(atlas *atlas, u64 key, ivec2 dim) {
 
     // NOTE(rune): If it fits in an existing shelf that is currently nonempty, just continue to use that shelf,
     // otherwise we begin a new shelf, by splitting the shelf with least wasted y space.
-    // TODO(rune): This approach could lead to a lot of short shelves. Think of another strategy to pick shelf to split?
 
     if (best_nonempty) {
         best = best_nonempty;
@@ -231,28 +216,30 @@ static atlas_node *atlas_new_node(atlas *atlas, u64 key, ivec2 dim) {
     }
 
     if (best) {
-        ret = atlas_alloc_node(atlas);
-        if (ret) {
-            slist_push(&best->nodes, ret);
-            ret->rect.x0 = best->used_x;
-            ret->rect.y0 = best->base_y;
-            ret->rect.x1 = best->used_x + dim.x;
-            ret->rect.y1 = best->base_y + dim.y;
-            ret->key = key;
+        slot = atlas_alloc_slot(atlas);
+        if (slot) {
+            slist_push(&best->slots, slot);
+            slot->rect.x0 = best->used_x;
+            slot->rect.y0 = best->base_y;
+            slot->rect.x1 = best->used_x + dim.x;
+            slot->rect.y1 = best->base_y + dim.y;
 
-            ret->last_accessed = atlas->current_generation;
-            best->last_accessed = atlas->current_generation;
+            slot->timestamp = atlas->curr_timestamp;
 
             best->used_x += dim.x;
+
+            key.idx = (u32)(slot - atlas->slots);
+            key.gen = slot->gen;
+            assert(key.gen != 0);
         }
     }
 
-    return ret;
+    return key;
 }
 
 static void atlas_reset(atlas *atlas) {
     for_list (atlas_shelf, it, atlas->shelves) {
-        if (it->nodes.first)  slist_join(&atlas->node_freelist, &it->nodes);
+        if (it->slots.first)  slist_join(&atlas->slot_freelist, &it->slots);
     }
 
     slist_join(&atlas->shelf_freelist, &atlas->shelves);

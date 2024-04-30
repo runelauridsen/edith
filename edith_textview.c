@@ -25,7 +25,7 @@ static void edith_textview_create(edith_textview *tv) {
     tv->local = edith_arena_create_default(str("textview/local"));
     darray_create(&tv->cursors, 4096);
 
-    edith_textview_set_face(tv, (ui_face) { 0 });
+    edith_textview_set_face(tv, (yo_face) { 0 });
 
     edith_cursor inital_cursor = edith_cursor_make(0, 0, EDITH_CURSOR_NO_WANT);
     inital_cursor.is_primary = true;
@@ -37,16 +37,16 @@ static void edith_textview_destroy(edith_textview *tv) {
     darray_destroy(&tv->cursors);
 }
 
-static void edith_textview_set_face(edith_textview *tv, ui_face face) {
-    tv->cell_dim.x = (i64)ui_font_backend_get_advance(' ', face);
-    tv->cell_dim.y = (i64)ui_font_backend_get_lineheight(face);
+static void edith_textview_set_face(edith_textview *tv, yo_face face) {
+    tv->cell_dim.x = (i64)yo_font_backend_get_advance(' ', face);
+    tv->cell_dim.y = (i64)yo_font_backend_get_lineheight(face);
 }
 
 ////////////////////////////////////////////////////////////////
 // rune: Pixel <> coord <> pos translation
 
 static i64 edith_textview_pos_from_pixel(edith_textview *tv, vec2 pixel) {
-    vec2_add_assign(&pixel, tv->animated_scroll.pos);
+    vec2_add_assign(&pixel, tv->animated_scroll);
     vec2_sub_assign(&pixel, vec2_from_ivec2(tv->glyph_viewport.p0));
     edith_textbuf_coord coord = {
         .col = i64(pixel.x) / tv->cell_dim.x,
@@ -507,7 +507,7 @@ static void edith_textview_submit_move_cursor(edith_textview *tv, move_by by, di
             }
 
             if (it->want.row == EDITH_CURSOR_NO_WANT_Y) {
-                it->want.row = caret_pos.row - (i64)tv->animated_scroll.pos.y;
+                it->want.row = caret_pos.row - (i64)tv->animated_scroll.y;
             }
 
             i64 move_y = tv->cells_per_page * dir;

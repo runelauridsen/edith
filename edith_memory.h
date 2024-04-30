@@ -59,9 +59,12 @@ struct edith_mem_track_list {
     edith_mem_track_node *last;
 };
 
-static arena *              edith_global_mem_track_arena = 0;
-static edith_mem_track_list edith_global_mem_track_list = { 0 };
-static os_handle            edith_global_mem_track_mutex = { 0 };
+////////////////////////////////////////////////////////////////
+// rune: Memory tracking
+
+static arena *              edith_g_mem_track_arena = 0;
+static edith_mem_track_list edith_g_mem_track_list = { 0 };
+static os_handle            edith_g_mem_track_mutex = { 0 };
 
 static void                  edith_mem_init(void);
 static edith_mem_track_node *edith_mem_track(void *param, edith_mem_track_kind kind, edith_mem_track_action action);

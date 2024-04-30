@@ -97,15 +97,7 @@ static void edith_edit_history_add_to_record(edith_edit_history *h, edith_edit_a
     assert(h->at);
 
     if (new_edits.count > 0) {
-
-        ////////////////////////////////////////////////
-        // Copy edits to history storage.
-
-        edith_edit_array copied_edits = edith_edit_array_copy(h->arena, new_edits, true);
-
-        ////////////////////////////////////////////////
-        // Add to current batch.
-
+        edith_edit_array copied_edits = edith_edit_array_copy(h->arena, new_edits, true);  // Copy edits to history storage.
         edith_edit_batch_push(&h->at->batch, copied_edits, h->arena);
     }
 

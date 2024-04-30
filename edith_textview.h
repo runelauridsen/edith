@@ -11,7 +11,7 @@ struct edith_cursor {
     i64 caret;
     i64 mark;
     edith_textbuf_coord want;
-    ui_animated_vec2 animated_p;
+    vec2 animated_p;
     bool is_primary;
 };
 
@@ -40,10 +40,13 @@ struct edith_textview {
 
     struct {
         // NOTE(rune): animated_scroll is in pixel coordidates, but targe_scroll is in cell coordinates.
-        ui_animated_vec2 animated_scroll;
+        vec2 animated_scroll;
         edith_textbuf_coord target_scroll;
 
-        ui_animated_f32 animated_linenumber_width;
+        f32  anim_linenumber_width;
+        f32  anim_linenumber_width_vel;
+        bool anim_linenumber_width_started;
+        bool anim_linenumber_width_finished;
     };
 
     u128 search_result_key_requested;
@@ -137,7 +140,7 @@ static i64  edith_textview_pos_from_pixel(edith_textview *tv, vec2 pixel);
 ////////////////////////////////////////////////////////////////
 // rune: Cell size
 
-static void  edith_textview_set_face(edith_textview *tv, ui_face face);
+static void  edith_textview_set_face(edith_textview *tv, yo_face face);
 
 ////////////////////////////////////////////////////////////////
 // rune: Debugging

@@ -1,48 +1,47 @@
-typedef struct atlas_node atlas_node;
-struct atlas_node {
-    irect rect;
-    u64 key;
-    i64 last_accessed;
-    atlas_node *next;
+typedef struct atlas_slot atlas_slot;
+struct atlas_slot {
+    urect rect;
+    u32 gen;
+    u32 timestamp;
+    atlas_slot *next;
+};
+
+typedef struct atlas_slot_key atlas_slot_key;
+struct atlas_slot_key {
+    u32 idx;
+    u32 gen;
 };
 
 typedef struct atlas_shelf atlas_shelf;
 struct atlas_shelf {
-    i32 base_y;
-    i32 used_x;
-    i32 dim_y;
-    i64 last_accessed;
+    u32 base_y;
+    u32 used_x;
+    u32 dim_y;
     atlas_shelf *next, *prev;
-    list(atlas_node) nodes;
+    list(atlas_slot) slots;
 };
 
 typedef struct atlas atlas;
 struct atlas {
     u8 *pixels;
-    i64 pixel_size;
+    uvec2 dim;
 
-    ivec2 dim;
     list(atlas_shelf) shelves;
 
     list(atlas_shelf) shelf_freelist;
-    list(atlas_node)  node_freelist;
+    list(atlas_slot)  slot_freelist;
 
-    atlas_shelf *shelf_storage;
-    i64          shelf_storage_count;
-
-    atlas_node  *node_storage;
-    i64          node_storage_count;
-
-    i32 shelf_storage_used;
-    i32 node_storage_used;
+    atlas_slot  *slots;
+    u32          slot_count;
 
     bool dirty;
-    i64 current_generation;
+    u32 curr_timestamp;
+
+    arena *arena;
 };
 
-static bool         atlas_create(atlas *atlas, ivec2 initial_dim, i32 max_nodes);
-static void         atlas_destroy(atlas *atlas);
-static void         atlas_reset(atlas *atlas);
-static atlas_node * atlas_new_node(atlas *atlas, u64 key, ivec2 dim);
-static atlas_node * atlas_get_node(atlas *atlas, u64 key);
-static rect         atlas_get_node_uv(atlas *atlas, atlas_node *node);
+static void             atlas_init(atlas *atlas, uvec2 dim, u32 max_slots, arena *arena);
+static atlas_slot_key   atlas_new_slot(atlas *atlas, uvec2 dim);
+static bool             atlas_get_slot(atlas *atlas, atlas_slot_key key, urect *rect);
+static rect             atlas_get_uv(atlas *atlas, urect r);
+static void             atlas_next_timestamp(atlas *atlas);

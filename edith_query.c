@@ -13,7 +13,7 @@ static edith_search_result_array edith_submit_textbuf_query(u128 key, str needle
             // rune: Look for cached response
             for_list (edith_query_slot, slot, cache->requests) {
                 if (str_eq(needle, slot->needle) && textbuf == slot->textbuf) {
-                    slot->accessed_frame_count = edith_global_frame_counter;
+                    slot->accessed_frame_count = edith_g_frame_counter;
                     results                    = slot->results;
                     *completed                 = slot->completed;
                     already_requested          = true;
@@ -27,7 +27,7 @@ static edith_search_result_array edith_submit_textbuf_query(u128 key, str needle
                 slot->needle               = arena_copy_str(cache->arena, needle);
                 slot->textbuf              = textbuf;
                 slot->key                  = key;
-                slot->accessed_frame_count = edith_global_frame_counter;
+                slot->accessed_frame_count = edith_g_frame_counter;
                 edith_query_slot_list_push(&cache->requests, slot);
 
                 os_cond_signal(cache->cond);
@@ -64,7 +64,7 @@ static edith_search_result_array edith_search_results_from_key(u128 key, bool *c
             }
 
             if (found) {
-                found->accessed_frame_count = edith_global_frame_counter;
+                found->accessed_frame_count = edith_g_frame_counter;
                 ret = found->results;
                 if (completed) {
                     *completed = found->completed;
@@ -164,11 +164,11 @@ static void edith_query_thread_entry_point(void *param) {
 
                 // rune: Garbage collect
                 if (handle_slot == null) {
-                    if (last_gc_frame_count != edith_global_frame_counter) {
-                        last_gc_frame_count = edith_global_frame_counter;
+                    if (last_gc_frame_count != edith_g_frame_counter) {
+                        last_gc_frame_count = edith_g_frame_counter;
 
                         for_list (edith_query_slot, it, cache->requests) {
-                            if (edith_global_frame_counter - it->accessed_frame_count > 1) {
+                            if (edith_g_frame_counter - it->accessed_frame_count > 1) {
                                 edith_query_slot_list_remove(&cache->requests, it);
                                 edith_query_slot_free(cache, it);
                             }
@@ -230,7 +230,7 @@ static void edith_query_thread_entry_point(void *param) {
             os_mutex_scope(cache->mutex) {
                 slot->arena = perm;
                 slot->results = array;
-                slot->accessed_frame_count = edith_global_frame_counter;
+                slot->accessed_frame_count = edith_g_frame_counter;
                 slot->completed = true;
 
                 os_cond_signal_all(cache->cond);

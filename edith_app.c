@@ -59,7 +59,7 @@ static void edith_free_editor_tab(edith_app *app, edith_editor_tab *editor) {
 
 static void edith_app_gather_commands(edith_app *app) {
     // debug
-    if (app->ui_ctx.frame_idx == 1) {
+    if (app->yo_state->frame_counter == 1) {
         //edith_push_cmd(EDITH_CMD_KIND_OPEN_FILE, str("W:\\edith\\main.c"));
         //edith_push_cmd(EDITH_CMD_KIND_OPEN_FILE, str("W:\\edith\\indexer\\test3.h"));
         //edith_push_cmd(EDITH_CMD_KIND_OPEN_FILE, str("C:\\users\\runel\\downloads\\miniaudio.h"));
@@ -75,114 +75,119 @@ static void edith_app_gather_commands(edith_app *app) {
     ////////////////////////////////////////////////
     // Editor commands.
 
-    ui_events events = ui_get_events();
-
     typedef struct edith_mapped_key edith_mapped_key;
     struct edith_mapped_key {
-        ui_key key;
-        ui_modifiers modifiers;
+        yo_key key;
+        yo_modifiers mods;
         edith_cmd_kind cmd_kind;
     };
 
     static readonly edith_mapped_key always_keymap[] = {
-        { UI_KEY_O,             UI_MODIFIER_CTRL,                       EDITH_CMD_KIND_SHOW_OPEN_FILE_DIALOG,            },
-        { UI_KEY_F,             UI_MODIFIER_CTRL,                       EDITH_CMD_KIND_SHOW_FIND_DIALOG,                 },
-        { UI_KEY_F,             UI_MODIFIER_CTRL|UI_MODIFIER_SHIFT,     EDITH_CMD_KIND_SHOW_FIND_ALL_DIALOG,             },
-        { UI_KEY_G,             UI_MODIFIER_CTRL,                       EDITH_CMD_KIND_SHOW_GOTO_LINE_DIALOG,            },
-        { UI_KEY_P,             UI_MODIFIER_CTRL|UI_MODIFIER_SHIFT,     EDITH_CMD_KIND_SHOW_COMMAND_DIALOG,              },
-        { UI_KEY_ESCAPE,        0,                                      EDITH_CMD_KIND_CLOSE_DIALOG,                     },
+        { YO_KEY_O,             YO_MODIFIER_CTRL,                       EDITH_CMD_KIND_SHOW_OPEN_FILE_DIALOG,            },
+        { YO_KEY_F,             YO_MODIFIER_CTRL,                       EDITH_CMD_KIND_SHOW_FIND_DIALOG,                 },
+        { YO_KEY_F,             YO_MODIFIER_CTRL|YO_MODIFIER_SHIFT,     EDITH_CMD_KIND_SHOW_FIND_ALL_DIALOG,             },
+        { YO_KEY_G,             YO_MODIFIER_CTRL,                       EDITH_CMD_KIND_SHOW_GOTO_LINE_DIALOG,            },
+        { YO_KEY_P,             YO_MODIFIER_CTRL|YO_MODIFIER_SHIFT,     EDITH_CMD_KIND_SHOW_COMMAND_DIALOG,              },
+        { YO_KEY_ESCAPE,        0,                                      EDITH_CMD_KIND_CLOSE_DIALOG,                     },
     };
 
     static readonly edith_mapped_key editor_keymap[] = {
         // rune: Move
-        { UI_KEY_LEFT,          0,                                      EDITH_CMD_KIND_MOVE_LEFT                        },
-        { UI_KEY_RIGHT,         0,                                      EDITH_CMD_KIND_MOVE_RIGHT                       },
-        { UI_KEY_UP,            0,                                      EDITH_CMD_KIND_MOVE_UP                          },
-        { UI_KEY_DOWN,          0,                                      EDITH_CMD_KIND_MOVE_DOWN                        },
+        { YO_KEY_LEFT,          0,                                      EDITH_CMD_KIND_MOVE_LEFT                        },
+        { YO_KEY_RIGHT,         0,                                      EDITH_CMD_KIND_MOVE_RIGHT                       },
+        { YO_KEY_UP,            0,                                      EDITH_CMD_KIND_MOVE_UP                          },
+        { YO_KEY_DOWN,          0,                                      EDITH_CMD_KIND_MOVE_DOWN                        },
 
-        { UI_KEY_LEFT,          UI_MODIFIER_CTRL,                       EDITH_CMD_KIND_MOVE_BY_WORD_LEFT                },
-        { UI_KEY_RIGHT,         UI_MODIFIER_CTRL,                       EDITH_CMD_KIND_MOVE_BY_WORD_RIGHT               },
-        { UI_KEY_UP,            UI_MODIFIER_CTRL,                       EDITH_CMD_KIND_MOVE_BY_PARAGRAPH_UP             },
-        { UI_KEY_DOWN,          UI_MODIFIER_CTRL,                       EDITH_CMD_KIND_MOVE_BY_PARAGRAPH_DOWN           },
-        { UI_KEY_HOME,          0,                                      EDITH_CMD_KIND_MOVE_TO_LINE_LEFT                },
-        { UI_KEY_END,           0,                                      EDITH_CMD_KIND_MOVE_TO_LINE_RIGHT               },
-        { UI_KEY_PAGE_UP,       0,                                      EDITH_CMD_KIND_MOVE_BY_PAGE_UP                  },
-        { UI_KEY_PAGE_DOWN,     0,                                      EDITH_CMD_KIND_MOVE_BY_PAGE_DOWN                },
-        { UI_KEY_HOME,          UI_MODIFIER_CTRL,                       EDITH_CMD_KIND_MOVE_TO_DOCUMENT_START           },
-        { UI_KEY_END,           UI_MODIFIER_CTRL,                       EDITH_CMD_KIND_MOVE_TO_DOCUMENT_END             },
+        { YO_KEY_LEFT,          YO_MODIFIER_CTRL,                       EDITH_CMD_KIND_MOVE_BY_WORD_LEFT                },
+        { YO_KEY_RIGHT,         YO_MODIFIER_CTRL,                       EDITH_CMD_KIND_MOVE_BY_WORD_RIGHT               },
+        { YO_KEY_UP,            YO_MODIFIER_CTRL,                       EDITH_CMD_KIND_MOVE_BY_PARAGRAPH_UP             },
+        { YO_KEY_DOWN,          YO_MODIFIER_CTRL,                       EDITH_CMD_KIND_MOVE_BY_PARAGRAPH_DOWN           },
+        { YO_KEY_HOME,          0,                                      EDITH_CMD_KIND_MOVE_TO_LINE_LEFT                },
+        { YO_KEY_END,           0,                                      EDITH_CMD_KIND_MOVE_TO_LINE_RIGHT               },
+        { YO_KEY_PAGE_UP,       0,                                      EDITH_CMD_KIND_MOVE_BY_PAGE_UP                  },
+        { YO_KEY_PAGE_DOWN,     0,                                      EDITH_CMD_KIND_MOVE_BY_PAGE_DOWN                },
+        { YO_KEY_HOME,          YO_MODIFIER_CTRL,                       EDITH_CMD_KIND_MOVE_TO_DOCUMENT_START           },
+        { YO_KEY_END,           YO_MODIFIER_CTRL,                       EDITH_CMD_KIND_MOVE_TO_DOCUMENT_END             },
 
         // rune: Select
-        { UI_KEY_LEFT,          UI_MODIFIER_SHIFT,                      EDITH_CMD_KIND_SELECT_LEFT                      },
-        { UI_KEY_RIGHT,         UI_MODIFIER_SHIFT,                      EDITH_CMD_KIND_SELECT_RIGHT                     },
-        { UI_KEY_UP,            UI_MODIFIER_SHIFT,                      EDITH_CMD_KIND_SELECT_UP                        },
-        { UI_KEY_DOWN,          UI_MODIFIER_SHIFT,                      EDITH_CMD_KIND_SELECT_DOWN                      },
+        { YO_KEY_LEFT,          YO_MODIFIER_SHIFT,                      EDITH_CMD_KIND_SELECT_LEFT                      },
+        { YO_KEY_RIGHT,         YO_MODIFIER_SHIFT,                      EDITH_CMD_KIND_SELECT_RIGHT                     },
+        { YO_KEY_UP,            YO_MODIFIER_SHIFT,                      EDITH_CMD_KIND_SELECT_UP                        },
+        { YO_KEY_DOWN,          YO_MODIFIER_SHIFT,                      EDITH_CMD_KIND_SELECT_DOWN                      },
 
-        { UI_KEY_LEFT,          UI_MODIFIER_SHIFT|UI_MODIFIER_CTRL,     EDITH_CMD_KIND_SELECT_BY_WORD_LEFT              },
-        { UI_KEY_RIGHT,         UI_MODIFIER_SHIFT|UI_MODIFIER_CTRL,     EDITH_CMD_KIND_SELECT_BY_WORD_RIGHT             },
-        { UI_KEY_UP,            UI_MODIFIER_SHIFT|UI_MODIFIER_CTRL,     EDITH_CMD_KIND_SELECT_BY_PARAGRAPH_UP           },
-        { UI_KEY_DOWN,          UI_MODIFIER_SHIFT|UI_MODIFIER_CTRL,     EDITH_CMD_KIND_SELECT_BY_PARAGRAPH_DOWN         },
-        { UI_KEY_HOME,          UI_MODIFIER_SHIFT,                      EDITH_CMD_KIND_SELECT_TO_LINE_LEFT              },
-        { UI_KEY_END,           UI_MODIFIER_SHIFT,                      EDITH_CMD_KIND_SELECT_TO_LINE_RIGHT             },
-        { UI_KEY_PAGE_UP,       UI_MODIFIER_SHIFT,                      EDITH_CMD_KIND_SELECT_BY_PAGE_UP                },
-        { UI_KEY_PAGE_DOWN,     UI_MODIFIER_SHIFT,                      EDITH_CMD_KIND_SELECT_BY_PAGE_DOWN              },
-        { UI_KEY_HOME,          UI_MODIFIER_SHIFT|UI_MODIFIER_CTRL,     EDITH_CMD_KIND_SELECT_TO_DOCUMENT_START         },
-        { UI_KEY_END,           UI_MODIFIER_SHIFT|UI_MODIFIER_CTRL,     EDITH_CMD_KIND_SELECT_TO_DOCUMENT_END           },
+        { YO_KEY_LEFT,          YO_MODIFIER_SHIFT|YO_MODIFIER_CTRL,     EDITH_CMD_KIND_SELECT_BY_WORD_LEFT              },
+        { YO_KEY_RIGHT,         YO_MODIFIER_SHIFT|YO_MODIFIER_CTRL,     EDITH_CMD_KIND_SELECT_BY_WORD_RIGHT             },
+        { YO_KEY_UP,            YO_MODIFIER_SHIFT|YO_MODIFIER_CTRL,     EDITH_CMD_KIND_SELECT_BY_PARAGRAPH_UP           },
+        { YO_KEY_DOWN,          YO_MODIFIER_SHIFT|YO_MODIFIER_CTRL,     EDITH_CMD_KIND_SELECT_BY_PARAGRAPH_DOWN         },
+        { YO_KEY_HOME,          YO_MODIFIER_SHIFT,                      EDITH_CMD_KIND_SELECT_TO_LINE_LEFT              },
+        { YO_KEY_END,           YO_MODIFIER_SHIFT,                      EDITH_CMD_KIND_SELECT_TO_LINE_RIGHT             },
+        { YO_KEY_PAGE_UP,       YO_MODIFIER_SHIFT,                      EDITH_CMD_KIND_SELECT_BY_PAGE_UP                },
+        { YO_KEY_PAGE_DOWN,     YO_MODIFIER_SHIFT,                      EDITH_CMD_KIND_SELECT_BY_PAGE_DOWN              },
+        { YO_KEY_HOME,          YO_MODIFIER_SHIFT|YO_MODIFIER_CTRL,     EDITH_CMD_KIND_SELECT_TO_DOCUMENT_START         },
+        { YO_KEY_END,           YO_MODIFIER_SHIFT|YO_MODIFIER_CTRL,     EDITH_CMD_KIND_SELECT_TO_DOCUMENT_END           },
 
-        { UI_KEY_A,             UI_MODIFIER_CTRL,                       EDITH_CMD_KIND_SELECT_ALL                       },
+        { YO_KEY_A,             YO_MODIFIER_CTRL,                       EDITH_CMD_KIND_SELECT_ALL                       },
 
         // rune: Delete
-        { UI_KEY_DELETE,        0,                                      EDITH_CMD_KIND_DELETE_LEFT,                     },
-        { UI_KEY_BACKSPACE,     0,                                      EDITH_CMD_KIND_DELETE_RIGHT,                    },
-        { UI_KEY_DELETE,        UI_MODIFIER_CTRL,                       EDITH_CMD_KIND_DELETE_BY_WORD_LEFT,             },
-        { UI_KEY_BACKSPACE,     UI_MODIFIER_CTRL,                       EDITH_CMD_KIND_DELETE_BY_WORD_RIGHT,            },
+        { YO_KEY_DELETE,        0,                                      EDITH_CMD_KIND_DELETE_LEFT,                     },
+        { YO_KEY_BACKSPACE,     0,                                      EDITH_CMD_KIND_DELETE_RIGHT,                    },
+        { YO_KEY_DELETE,        YO_MODIFIER_CTRL,                       EDITH_CMD_KIND_DELETE_BY_WORD_LEFT,             },
+        { YO_KEY_BACKSPACE,     YO_MODIFIER_CTRL,                       EDITH_CMD_KIND_DELETE_BY_WORD_RIGHT,            },
 
         // rune: Undo/redo
-        { UI_KEY_Z,             UI_MODIFIER_CTRL,                       EDITH_CMD_KIND_UNDO,                            },
-        { UI_KEY_Y,             UI_MODIFIER_CTRL,                       EDITH_CMD_KIND_REDO,                            },
+        { YO_KEY_Z,             YO_MODIFIER_CTRL,                       EDITH_CMD_KIND_UNDO,                            },
+        { YO_KEY_Y,             YO_MODIFIER_CTRL,                       EDITH_CMD_KIND_REDO,                            },
 
         // rune: Cursors.
-        { UI_KEY_UP,            UI_MODIFIER_SHIFT|UI_MODIFIER_ALT,      EDITH_CMD_KIND_ADD_CURSOR_ABOVE,                },
-        { UI_KEY_DOWN,          UI_MODIFIER_SHIFT|UI_MODIFIER_ALT,      EDITH_CMD_KIND_ADD_CURSOR_BELOW,                },
-        { UI_KEY_D,             UI_MODIFIER_CTRL,                       EDITH_CMD_KIND_ADD_CURSOR_AT_NEXT_OCCURENCE,    },
-        { UI_KEY_D,             UI_MODIFIER_CTRL|UI_MODIFIER_SHIFT,     EDITH_CMD_KIND_ADD_CURSOR_AT_PREV_OCCURENCE,    },
-        { UI_KEY_ESCAPE,        0,                                      EDITH_CMD_KIND_CLEAR_CURSORS,                   },
-        { UI_KEY_M,             UI_MODIFIER_CTRL,                       EDITH_CMD_KIND_FLIP_CURSOR,                     },
+        { YO_KEY_UP,            YO_MODIFIER_SHIFT|YO_MODIFIER_ALT,      EDITH_CMD_KIND_ADD_CURSOR_ABOVE,                },
+        { YO_KEY_DOWN,          YO_MODIFIER_SHIFT|YO_MODIFIER_ALT,      EDITH_CMD_KIND_ADD_CURSOR_BELOW,                },
+        { YO_KEY_D,             YO_MODIFIER_CTRL,                       EDITH_CMD_KIND_ADD_CURSOR_AT_NEXT_OCCURENCE,    },
+        { YO_KEY_D,             YO_MODIFIER_CTRL|YO_MODIFIER_SHIFT,     EDITH_CMD_KIND_ADD_CURSOR_AT_PREV_OCCURENCE,    },
+        { YO_KEY_ESCAPE,        0,                                      EDITH_CMD_KIND_CLEAR_CURSORS,                   },
+        { YO_KEY_M,             YO_MODIFIER_CTRL,                       EDITH_CMD_KIND_FLIP_CURSOR,                     },
 
         // rune: Tab
-        { UI_KEY_S,             UI_MODIFIER_CTRL,                       EDITH_CMD_KIND_SAVE_ACTIVE_TAB,                 },
-        { UI_KEY_W,             UI_MODIFIER_CTRL,                       EDITH_CMD_KIND_CLOSE_ACTIVE_TAB,                },
+        { YO_KEY_S,             YO_MODIFIER_CTRL,                       EDITH_CMD_KIND_SAVE_ACTIVE_TAB,                 },
+        { YO_KEY_W,             YO_MODIFIER_CTRL,                       EDITH_CMD_KIND_CLOSE_ACTIVE_TAB,                },
 
         // rune: Pane
-        { UI_KEY_K,             UI_MODIFIER_CTRL,                       EDITH_CMD_KIND_NEXT_PANE,                       },
-        { UI_KEY_K,             UI_MODIFIER_CTRL|UI_MODIFIER_SHIFT,     EDITH_CMD_KIND_PREV_PANE,                       },
+        { YO_KEY_K,             YO_MODIFIER_CTRL,                       EDITH_CMD_KIND_NEXT_PANE,                       },
+        { YO_KEY_K,             YO_MODIFIER_CTRL|YO_MODIFIER_SHIFT,     EDITH_CMD_KIND_PREV_PANE,                       },
 
         // rune: Misc move
-        { UI_KEY_R,             UI_MODIFIER_CTRL,                       EDITH_CMD_KIND_MOVE_TO_NEXT_OCCURENCE,          },
-        { UI_KEY_R,             UI_MODIFIER_CTRL|UI_MODIFIER_SHIFT,     EDITH_CMD_KIND_MOVE_TO_PREV_OCCURENCE,          },
+        { YO_KEY_R,             YO_MODIFIER_CTRL,                       EDITH_CMD_KIND_MOVE_TO_NEXT_OCCURENCE,          },
+        { YO_KEY_R,             YO_MODIFIER_CTRL|YO_MODIFIER_SHIFT,     EDITH_CMD_KIND_MOVE_TO_PREV_OCCURENCE,          },
 
         // rune: Clipboard
-        { UI_KEY_X,             UI_MODIFIER_CTRL,                       EDITH_CMD_KIND_CUT,                             },
-        { UI_KEY_C,             UI_MODIFIER_CTRL,                       EDITH_CMD_KIND_COPY,                            },
-        { UI_KEY_V,             UI_MODIFIER_CTRL,                       EDITH_CMD_KIND_PASTE,                           },
+        { YO_KEY_X,             YO_MODIFIER_CTRL,                       EDITH_CMD_KIND_CUT,                             },
+        { YO_KEY_C,             YO_MODIFIER_CTRL,                       EDITH_CMD_KIND_COPY,                            },
+        { YO_KEY_V,             YO_MODIFIER_CTRL,                       EDITH_CMD_KIND_PASTE,                           },
     };
 
-    for_array (ui_event, e, events) {
-        if (e->type == UI_EVENT_TYPE_KEYPRESS) {
+    for_list (yo_event, e, yo_events()) {
+        bool eat = false;
+        if (e->kind == YO_EVENT_KIND_KEY_PRESS) {
             for_sarray (edith_mapped_key, k, always_keymap) {
-                if ((k->key == e->key) && (k->modifiers == e->modifiers)) {
+                if ((k->key == e->key) && (k->mods == e->mods)) {
                     edith_cmd cmd = { .kind = k->cmd_kind };
-                    edith_cmd_ring_write(&edith_global_cmd_ring, &cmd);
+                    edith_cmd_ring_write(&edith_g_cmd_ring, &cmd);
+                    eat = true;
                 }
             }
 
             if (app->state == EDITH_APP_STATE_DEFAULT) {
                 for_sarray (edith_mapped_key, k, editor_keymap) {
-                    if ((k->key == e->key) && (k->modifiers == e->modifiers)) {
+                    if ((k->key == e->key) && (k->mods == e->mods)) {
                         edith_cmd cmd = { .kind = k->cmd_kind };
-                        edith_cmd_ring_write(&edith_global_cmd_ring, &cmd);
+                        edith_cmd_ring_write(&edith_g_cmd_ring, &cmd);
+                        eat = true;
                     }
                 }
             }
+        }
+
+        if (eat) {
+            yo_event_eat(e);
         }
     }
 }
@@ -195,7 +200,7 @@ static edith_editor_tab *edith_app_get_active_editor(edith_app *app) {
     return active_tab;
 }
 
-// TODO(rune): Wrapping
+// TODO(rune): Wrapping.
 static i64 edith_find_next_occurence_of_selection(edith_textview *editor, edith_cursor cursor, dir dir) {
     i64 len = edith_textbuf_len(&editor->tb);
     i64 ret = -1;
@@ -225,8 +230,9 @@ static i64 edith_find_next_occurence_of_selection(edith_textview *editor, edith_
     return ret;
 }
 
+
 #pragma warning ( push )
-#pragma warning ( error : 4061) // enumerator in switch of enum is not explicitly handled by a case label.
+//#pragma warning ( error : 4061) // enumerator in switch of enum is not explicitly handled by a case label.
 static bool edith_app_handle_command(edith_app *app, edith_cmd *cmd) {
     YO_PROFILE_BEGIN(edith_app_handle_command);
 
@@ -241,7 +247,7 @@ static bool edith_app_handle_command(edith_app *app, edith_cmd *cmd) {
 
     if (!skip) {
         //cmd_print(cmd);
-        ui_invalidate_next_frame();
+        yo_invalidate_next_frame();
 
         switch (cmd->kind) {
             case EDITH_CMD_KIND_NONE: {
@@ -274,6 +280,7 @@ static bool edith_app_handle_command(edith_app *app, edith_cmd *cmd) {
                 }
             } break;
 
+#if 0
             case EDITH_CMD_KIND_SHOW_OPEN_FILE_DIALOG: {
                 app->state = EDITH_APP_STATE_OPEN_FILE;
                 app->dialog_open_file.name_len = 0;
@@ -303,6 +310,7 @@ static bool edith_app_handle_command(edith_app *app, edith_cmd *cmd) {
             case EDITH_CMD_KIND_CLOSE_DIALOG: {
                 app->state = EDITH_APP_STATE_DEFAULT;
             } break;
+#endif
 
             case EDITH_CMD_KIND_OPEN_FILE: {
                 str file_name = cmd->body;
@@ -346,9 +354,9 @@ static bool edith_app_handle_command(edith_app *app, edith_cmd *cmd) {
                     bool succeeded = false;
                     os_write_entire_file(tab->file_name, full_text, temp, &succeeded);
                     if (succeeded) {
-                        ui_post_toast(0, ui_fmt("Saved file '%'.", tab->file_name));
+                        //ui_post_toast(0, ui_fmt("Saved file '%'.", tab->file_name));
                     } else {
-                        ui_post_toast(0, ui_fmt("Could not save file '%'.", tab->file_name));
+                        //ui_post_toast(0, ui_fmt("Could not save file '%'.", tab->file_name));
                     }
                 }
             } break;
@@ -720,10 +728,6 @@ static bool edith_app_handle_command(edith_app *app, edith_cmd *cmd) {
                     }
                 }
             } break;
-
-            default: {
-                assert(!"Unknown command kind.");
-            } break;
         }
     }
 
@@ -736,7 +740,7 @@ static bool edith_app_handle_command(edith_app *app, edith_cmd *cmd) {
 static void edith_app_consume_commands(edith_app *app) {
     while (1) {
         edith_cmd cmd2 = { 0 };
-        i64 peeked_size = edith_cmd_ring_peek(&edith_global_cmd_ring, &cmd2, 0, edith_temp());
+        i64 peeked_size = edith_cmd_ring_peek(&edith_g_cmd_ring, &cmd2, 0, edith_temp());
         if (peeked_size == 0) {
             break;
         }
@@ -744,177 +748,41 @@ static void edith_app_consume_commands(edith_app *app) {
         print("from cmd queue %\n", edith_cmd_spec_from_kind(cmd2.kind)->name);
         bool handled = edith_app_handle_command(app, &cmd2);
         if (handled) {
-            edith_cmd_ring_skip(&edith_global_cmd_ring, peeked_size);
+            edith_cmd_ring_skip(&edith_g_cmd_ring, peeked_size);
         } else {
             break;
         }
     }
 }
 
-static ui_ops edith_temp_get_ui_ops(void) {
-    ui_ctx *ctx = global_ui_ctx;
-
-    buf op_data_buf = ctx->op_data_buf;
-    buf op_type_buf = ctx->op_def_buf;
-
-    ui_ops ops = { 0 };
-    ops.defs       = (ui_op_def *)op_type_buf.v;
-    ops.def_count  = (u32)(op_type_buf.len / sizeof(ui_op_def));
-    ops.data       = op_data_buf.v;
-    ops.data_size  = op_data_buf.count;
-
-    return ops;
-}
-
-static void edith_debug_print_ui_ops(ui_ops ops) {
-    println(ANSI_FG_GRAY "======================================" ANSI_RESET);
-
-    for_narray (ui_op_def, it, ops.defs, ops.def_count) {
-        println("% \t data_offset = % ", ui_op_type_as_cstr(it->type), it->data_offset);
-    }
-}
-
-static vec2 edith_transform_vec2(vec2 v, vec2 transform) {
-    return vec2_add(v, transform);
-}
-
-static rect edith_transform_rect(rect v, vec2 transform) {
-    return rect_make(vec2_add(v.p0, transform), vec2_add(v.p1, transform));
-}
-
-static void edith_app_draw_ui_ops(edith_app *app, ui_ops ops) {
-    YO_PROFILE_BEGIN(edith_app_draw_ui_ops);
-
-    ui_stack(rect) scissors = { 0 };
-    ui_stack(vec2) transforms = { 0 };
-
-    ui_stack_init(vec2, &transforms, ui_arena(), VEC2_ZERO);
-    ui_stack_init(rect, &scissors, ui_arena(), rect_make(VEC2_MIN, VEC2_MAX));
-
-    for_narray (ui_op_def, tag, ops.defs, ops.def_count) {
-        assert(tag->data_offset < ops.data_size);
-        void *data = ops.data + tag->data_offset;
-        switch (tag->type) {
-            case UI_OP_TYPE_GLYPH: {
-                ui_op_glyph *op = data;
-                draw_glyph(op->codepoint, edith_transform_vec2(op->p, transforms.top), op->color, op->face, &app->font_backend);
-            } break;
-
-            case UI_OP_TYPE_TEXT: {
-                ui_op_text *op = data;
-                draw_text(op->s, edith_transform_vec2(op->p, transforms.top), op->color, op->face, &app->font_backend);
-            } break;
-
-            case UI_OP_TYPE_AABB: {
-                ui_op_aabb *op = data;
-                r_rect_instance inst = {
-                    .dst_rect   = edith_transform_rect(op->rect, transforms.top),
-                    .color      = { op->color, op->color, op->color, op->color }
-                };
-                draw_rect_instance(inst);
-            } break;
-
-            case UI_OP_TYPE_AABB_EX: {
-                ui_op_aabb_ex *op = data;
-                r_rect_instance inst = {
-                    .dst_rect   = edith_transform_rect(op->dst_rect, transforms.top),
-                    .tex_rect   = op->tex_rect,
-                    .tex_weight = op->tex_weight,
-                    .softness   = op->softness,
-                    .roundness  = op->corner_radius[0], // @Todo Different radius per. corner.
-                    .color[0]   = op->color[0],
-                    .color[1]   = op->color[1],
-                    .color[2]   = op->color[2],
-                    .color[3]   = op->color[3],
-                };
-                draw_rect_instance(inst);
-            } break;
-
-            case UI_OP_TYPE_QUAD: {
-            } break;
-
-            case UI_OP_TYPE_SCISSOR: {
-                ui_op_scissor *op = data;
-
-#ifdef APP_DOES_SCISSOR_INTERSECT_AND_TRANSFORM_ADD
-                rect scissor = transform_rect(op->rect, transforms.top);
-                if (!(op->flags & UI_SCISSOR_FLAG_NO_INTERSECT)) {
-                    scissor = rect_intersect(scissor, ui_stack_get_prev(rect, &scissors));
-                }
-#else
-                rect scissor = op->rect;
-#endif
-
-                ui_stack_set(rect, &scissors, scissor);
-                draw_set_scissor(scissors.top);
-            } break;
-
-            case UI_OP_TYPE_TRANSFORM: {
-                ui_op_transform *op = data;
-#ifdef APP_DOES_SCISSOR_INTERSECT_AND_TRANSFORM_ADD
-                vec2 transform = op->vec;
-                if (!(op->flags & UI_TRANSFORM_FLAG_NO_RELATIVE)) {
-                    transform = transform_vec2(op->vec, transforms.top);
-                }
-#else
-                vec2 transform = op->vec;
-#endif
-                ui_stack_set(vec2, &transforms, transform);
-            } break;
-
-            case UI_OP_TYPE_PUSH_SCISSOR: {
-                ui_stack_push(rect, &scissors);
-            } break;
-
-            case UI_OP_TYPE_POP_SCISSOR: {
-                ui_stack_pop(rect, &scissors);
-                draw_set_scissor(scissors.top);
-            } break;
-
-            case UI_OP_TYPE_PUSH_TRANSFORM: {
-                ui_stack_push(vec2, &transforms);
-            } break;
-
-            case UI_OP_TYPE_POP_TRANSFORM: {
-                ui_stack_pop(vec2, &transforms);
-            } break;
-
-            default: {
-                assert(!"Invalid code path.");
-            } break;
-        }
-    }
-    YO_PROFILE_END(edith_app_draw_ui_ops);
-}
-
 static void edith_app_do_ui_pane(edith_app *app, edith_pane *pane, rect area) {
-    ui_events events = ui_get_events();
-
     bool active = (pane == app->active_pane);
+#if 0
     if (active) {
         ui_cut_and_draw_border(&area, ui_make_border(1, rgb(20, 60, 60), 0), rgb(0, 0, 0));
     } else {
         ui_cut_and_draw_border(&area, ui_make_border(1, rgb(30, 30, 30), 0), rgb(0, 0, 0));
     }
+#endif
 
     f32 target_active_t = active ? 0.0f : 1.0f;
-    ui_anim_f32(&pane->active_t, target_active_t, 15.0f);
+    yo_anim_f32(&pane->active_t, target_active_t, 15.0f);
 
     if (pane->tab) {
         ////////////////////////////////////////////////////////////////
         // rune: Editor
 
-        ui_id id = ui_id(pane);
-        ui_set_face(app->editor_face);
+        yo_id id = yo_id(pane);
+        yo_face_set(app->editor_face);
         if (app->state == EDITH_APP_STATE_DEFAULT && active) {
             if (app->window_has_focus) {
-                ui_set_active_id(id);
+                yo_state_get()->active_id = id;
             }
-            edith_editor_tab_handle_events(id, pane->tab, events, app->temp);
+            editor_tab_handle_events(id, pane->tab, app->temp);
         }
 
         rect editor_area = area;
-        rect status_bar_area = ui_cut_bot(&editor_area, 25.0f);
+        rect status_bar_area = yo_rect_cut_bot(&editor_area, 25.0f);
 
         // rune: Draw editor
         edith_textview *editor = &pane->tab->v;
@@ -928,48 +796,106 @@ static void edith_app_do_ui_pane(edith_app *app, edith_pane *pane, rect area) {
         i64 sel              = range_len(edith_cursor_range(*cursor));
 
         // rune: Draw status bar
-        ui_draw_rect(status_bar_area, rgb(20, 30, 30));
+        yo_draw_rect(status_bar_area, rgb(20, 30, 30));
         rect status_text_area = status_bar_area;
-        ui_cut_centered_y(&status_text_area, ui_em(1));
-        ui_cut_left(&status_text_area, 5);
-        ui_draw_text_r(status_text_area, ui_fmt("line: %      col: %      pos: %      sel: %", row + 1, col + 1, caret_pos, sel), rgb(200, 200, 200));
+        yo_rect_cut_centered_y(&status_text_area, yo_em(1));
+        yo_rect_cut_left(&status_text_area, 5);
+        yo_draw_text(status_text_area.p0, yo_fmt("line: %      col: %      pos: %      sel: %", row + 1, col + 1, caret_pos, sel), rgb(200, 200, 200));
     } else {
 
         ////////////////////////////////////////////////////////////////
         // rune: Home screen
 
-        ui_draw_rect(area, rgb(20, 20, 20));
-        ui_set_face(ui_make_face(app->sans_font, 20));
+        yo_draw_rect(area, rgb(20, 20, 20));
+        yo_face_set(yo_face_make(app->sans_font, 20));
         str text = str("Edith v0.1");
-        vec2 text_dim = ui_measure_text(text);
+        vec2 text_dim = yo_dim_from_text(text);
         rect text_rect = area;
-        ui_cut_centered(&text_rect, text_dim);
+        yo_rect_cut_centered(&text_rect, text_dim);
 
-        ui_draw_text_r(text_rect, text, rgb(200, 200, 200));
+        yo_draw_text(text_rect.p0, text, rgb(200, 200, 200));
     }
 
-    ui_draw_rect(area, rgba(0, 0, 0, (u8)(pane->active_t.pos * 100.0f)));
+    yo_draw_rect(area, rgba(0, 0, 0, (u8)(pane->active_t * 100.0f)));
 }
 
 static void edith_app_do_ui(edith_app *app, rect client_rect) {
+#if 1
+    yo_node(0) {
+        yo_node_get()->tag = "main";
+        yo_draw_rect(rect_make(vec2(0, 0), vec2(100, 100)), YO_COLOR_GREEN);
+
+        yo_node(0) {
+            yo_node_get()->tag = "a";
+        }
+
+        yo_node(0) {
+            yo_node_get()->tag = "b";
+            yo_node_get()->rel_offset = vec2(20, 20);
+            yo_node_get()->rel_rect = rect_make(vec2(0, 0), vec2(100, 100));
+            yo_node_get()->flags = YO_NODE_FLAG_CLIP;
+
+            yo_draw_rect(rect_make(vec2(0, 0), vec2(100, 100)), YO_COLOR_RED);
+
+
+            yo_node(0) {
+                yo_node_get()->tag = "b/a";
+                yo_node_get()->rel_offset = vec2(20, 20);
+                yo_draw_rect(rect_make(vec2(0, 0), vec2(100, 100)), YO_COLOR_ORANGE);
+            }
+            yo_node(0) {
+                yo_node_get()->tag = "b/b";
+            }
+            yo_node(0) {
+                yo_node_get()->tag = "b/c";
+            }
+            yo_node(0) {
+                yo_node_get()->tag = "b/d";
+            }
+        }
+        yo_node(0) {
+            yo_node_get()->tag = "c";
+        }
+
+        yo_node(0) {
+            yo_node_get()->tag = "d";
+            yo_node(0) {
+                yo_node_get()->tag = "b/a";
+            }
+            yo_node(0) {
+                yo_node_get()->tag = "b/b";
+            }
+            yo_node(0) {
+                yo_node_get()->tag = "b/c";
+            }
+            yo_node(0) {
+                yo_node_get()->tag = "b/d";
+            }
+        }
+    }
+
+    return;
+#endif
+
 #if 0 // ui library demo
     ui_set_face(ui_make_face(app->sans_font, 18));
     ui_demo(client_rect);
 #else
+#if 0
     // TODO(rune): How to handle tab switcher special interaction with commands.h style commands?
-    ui_events events = ui_get_events();
-    for_array (ui_event, e, events) {
-        if (ui_event_is_keypress_with_modifiers(e, UI_KEY_TAB, UI_MODIFIER_CTRL)) {
+    for_list (yo_event, e, yo_events()) {
+        if (yo_event_is_key_press(e, YO_KEY_TAB, YO_MODIFIER_CTRL)) {
             app->state = EDITH_APP_STATE_TAB_SWITCHER;
         }
 
-        if (ui_event_is_key_release(e, UI_KEY_CTRL) && app->state == EDITH_APP_STATE_TAB_SWITCHER) {
+        if (yo_event_is_key_release(e, YO_KEY_CTRL) && app->state == EDITH_APP_STATE_TAB_SWITCHER) {
             app->state = EDITH_APP_STATE_DEFAULT;
         }
     }
+#endif
 
     rect main_rect = client_rect;
-    ui_draw_rect(main_rect, rgb(20, 20, 20));
+    yo_draw_rect(main_rect, rgb(20, 20, 20));
 
     ////////////////////////////////////////////////
     // Editor or homescreen.
@@ -977,16 +903,17 @@ static void edith_app_do_ui(edith_app *app, rect client_rect) {
     rect left_rect  = main_rect;
     rect right_rect = main_rect;
 
-    left_rect  = ui_get_left(&main_rect, rect_dim_x(main_rect) * 0.5f);
-    right_rect = ui_get_right(&main_rect, rect_dim_x(main_rect) * 0.5f);
+    left_rect  = yo_rect_get_left(&main_rect, rect_dim_x(main_rect) * 0.5f);
+    right_rect = yo_rect_get_right(&main_rect, rect_dim_x(main_rect) * 0.5f);
 
     edith_app_do_ui_pane(app, &app->left_pane, left_rect);
     edith_app_do_ui_pane(app, &app->right_pane, right_rect);
 
+#if 0
     // rune: File lister.
-    ui_set_face(ui_make_face(app->sans_font, 20));
+    yo_face_set(yo_face_make(app->sans_font, 20));
     if (app->state == EDITH_APP_STATE_OPEN_FILE) {
-        edith_dialog_open_file(client_rect, ui_id("lister"), &app->dialog_open_file, app->state == EDITH_APP_STATE_OPEN_FILE, events);
+        dialog_open_file(client_rect, ui_id("lister"), &app->dialog_open_file, app->state == EDITH_APP_STATE_OPEN_FILE, events);
     }
 
     // rune: Tab switcher.
@@ -1018,6 +945,7 @@ static void edith_app_do_ui(edith_app *app, rect client_rect) {
     }
 
     ui_toasts(client_rect);
+#endif
 #endif
 
 #if 0
@@ -1064,9 +992,8 @@ static edith_app_output edith_app_update_and_render(edith_app *app, edith_app_in
 
     edith_perf_timing_begin(&app->frame_timing);
 
-    //
-    // Startup.
-    //
+    ////////////////////////////////////////////////////////////////
+    // rune: Startup
 
     if (!app->initialized) {
         app->initialized = true;
@@ -1076,21 +1003,20 @@ static edith_app_output edith_app_update_and_render(edith_app *app, edith_app_in
 
         edith_thread_local_arena = app->temp;
 
-        atlas_create(&app->atlas, ivec2(512, 512), 4096);
-        app->ui_toast_ctx.storage = (ui_toast_array) { app->ui_toast_storage, countof(app->ui_toast_storage) };
+        atlas_init(&app->atlas, uvec2(512, 512), 4096, app->perm);
 
+        font_backend_startup(&app->font_backend, &app->atlas);
 
-        font_backend_stb_startup(&app->font_backend, &app->atlas);
+        g_mono_font = app->mono_font = font_backend_init_font(&app->font_backend, str_from_sarray(liberation_mono_data));
+        g_sans_font = app->sans_font = font_backend_init_font(&app->font_backend, str_from_sarray(liberation_mono_data));
 
-        global_mono_font = app->mono_font = font_backend_stb_init_font(&app->font_backend, liberation_mono_data, sizeof(liberation_mono_data));
-        global_sans_font = app->sans_font = font_backend_stb_init_font(&app->font_backend, opensans_stripped_regular_data, sizeof(opensans_stripped_regular_data));
+        app->editor_face = yo_face_make(app->mono_font, 10);
 
-        app->editor_face = ui_make_face(app->mono_font, 10);
-
-        app->ui_ctx.invalidate_next_frame = true;
-        app->ui_ctx.font_backend.userdata = &app->font_backend;
-        app->ui_ctx.font_backend.get_advance = font_backend_stb_get_advance;
-        app->ui_ctx.font_backend.get_lineheight = font_backend_stb_get_lineheight;
+        app->yo_state = yo_state_create();
+        app->yo_state->invalidate_next_frame       = true;
+        app->yo_state->font_backend.userdata       = &app->font_backend;
+        app->yo_state->font_backend.get_advance    = font_backend_get_advance;
+        app->yo_state->font_backend.get_lineheight = font_backend_get_lineheight;
     }
 
     arena_scope_begin(app->temp);
@@ -1098,40 +1024,31 @@ static edith_app_output edith_app_update_and_render(edith_app *app, edith_app_in
     ////////////////////////////////////////////////////////////////
     // rune: Setup globals.
 
-    global_deltatime = input.deltatime;
-    global_tick = input.tick;
+    g_deltatime = input.deltatime;
+    g_tick      = input.tick;
 
-    global_ui_toast_ctx = &app->ui_toast_ctx;
-    ui_select_ctx(&app->ui_ctx);
-    draw_select_ctx(&app->draw_ctx);
+    yo_state_select(app->yo_state);
 
     ////////////////////////////////////////////////////////////////
     // rune: Update and draw UI.
 
     bool need_redraw = false;
-    r_pass_list pass_list = { 0 };
-    darray_reset(&app->ui_rect_storage);
 
     app->window_has_focus = input.window_has_focus;
 
-    draw_begin();
-
-    ui_input ui_input = { 0 };
-    ui_input.events = input.events;
-    ui_input.mouse_pos = input.mouse_pos;
-    ui_input.mouse_buttons = input.mouse_buttons;
-    ui_input.client_rect = input.client_rect;
-    draw_begin_rect_pass(input.client_rect, &app->ui_rect_storage, &app->atlas);
+    yo_input yo_input = { 0 };
+    yo_input.events = input.events;
+    yo_input.mouse_pos = input.mouse_pos;
+    //yo_input.mouse_buttons = input.mouse_buttons;
+    yo_input.client_rect = input.client_rect;
+    yo_input.delta_time = g_deltatime;
     edith_perf_timing_begin(&app->build_ui_timing);
     {
-        if (global_ui_ctx->invalidate_next_frame || input.events.count > 0) {
-            // DEBUG
-            //println(ANSI_FG_GRAY "======================================" ANSI_RESET);
-
-            ui_next_frame(&ui_input);
+        if (1) {
+            yo_frame_begin(&yo_input);
             edith_app_gather_commands(app);
             edith_app_do_ui(app, input.client_rect);
-            ui_end_frame();
+            yo_frame_end();
             need_redraw = true;
         }
     }
@@ -1140,15 +1057,8 @@ static edith_app_output edith_app_update_and_render(edith_app *app, edith_app_in
 #if 0
     debug_print_ui_ops(temp_get_ui_ops()); // DEBUG
 #endif
-    edith_app_draw_ui_ops(app, edith_temp_get_ui_ops());
+    //edith_app_draw_ui_ops(app, edith_temp_get_ui_ops());
     edith_perf_timing_end(&app->draw_ui_ops_timing);
-
-    draw_end_rect_pass();
-    draw_submit_current_pass();
-
-    pass_list = draw_end();
-
-    app->last_frame_rect_instance_count = pass_list.last->type_rects.instances.count;
 
     ////////////////////////////////////////////////////////////////
     // rune: Process ui commands
@@ -1159,7 +1069,7 @@ static edith_app_output edith_app_update_and_render(edith_app *app, edith_app_in
     // rune: Finish frame
 
     edith_app_output ret = { 0 };
-    ret.render_passes = pass_list;
+    ret.root = app->yo_state->root;
     ret.need_redraw = need_redraw;
 
     //doc_debug_print_state_(&app->editor.doc);
@@ -1185,15 +1095,15 @@ static edith_app_output edith_app_update_and_render(edith_app *app, edith_app_in
 
     arena_scope_end(app->temp);
 
-    ui_invalidate_next_frame();
+    yo_invalidate_next_frame();
 
-    //edith_mem_track_print();
+    edith_mem_track_print();
     //edith_mem_track_dump_csv(str("C:\\temp\\edith_mem.csv"));
 
 
 #ifdef TRACK_ALLOCATIONS
     for_array (ui_event, e, input.events) {
-        if (ui_event_is_keypress(e, UI_KEY_K)) {
+        if (ui_event_is_keypress(e, YO_KEY_K)) {
             print(ANSI_ERASE_SCREEN);
             print(ANSI_HOME);
             idk_print_tracked_allocations(true, true);
@@ -1201,8 +1111,8 @@ static edith_app_output edith_app_update_and_render(edith_app *app, edith_app_in
     }
 #endif
 
-    edith_global_frame_counter += 1;
+    edith_g_frame_counter += 1;
 
     YO_PROFILE_END(edith_app_update_and_render);
     return ret;
-        }
+}

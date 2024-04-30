@@ -192,7 +192,7 @@ struct edith_cmd {
     str body;
 };
 
-static edith_cmd_ring edith_global_cmd_ring = { 0 };
+static edith_cmd_ring edith_g_cmd_ring = { 0 };
 
 static i64  edith_cmd_ring_write(edith_cmd_ring *queue, edith_cmd *cmd);
 static i64  edith_cmd_ring_peek(edith_cmd_ring *queue, edith_cmd *cmd, u64 off, arena *arena);
